@@ -1,0 +1,10 @@
+LOCATION=RSXX0091
+
+ICON=`/usr/share/awesome/bashets/conkyForecast.py --location=$LOCATION --datatype=WF | tail -n 1`
+TEMP=`/usr/share/awesome/bashets/conkyForecast.py --location=$LOCATION --datatype=HT | tail -n 1`
+
+if echo "$ICON" | grep -q "No"; then
+    echo -n "k N/A"
+else
+    echo -n "$ICON $TEMP"
+fi
