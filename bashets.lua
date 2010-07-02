@@ -3,8 +3,8 @@
 --
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010 Anton Lobov
--- @license GPLv2
--- @release 0.3.2 for Awesome 3.4
+-- @license GPLv3
+-- @release 0.4 for Awesome 3.4
 -----------------------------------------------------------------------
 
 -- Grab only needed enviroment
@@ -17,6 +17,7 @@ local timer = timer
 local type = type
 local image = image
 local tonumber = tonumber
+local print = print
 
 
 --- Bashets module
@@ -287,106 +288,103 @@ end
 
 -- # Widget registration functions
 
+--- General widget-callback registration function. For internal use, but if you need it, feel free to call it :)
+-- @param data_provider Function that returns table of values
+-- @param widget Widget to update, if null, nothing is updated
+-- @param callback Callback to call after the update of values, if null, nothing is called
+-- @param format Format string for widget //N.B.: it is not checked for null
+function schedule_w(data_provider, widget, callback, format)
+	if callback ~= nil and type(callback) == "function" then
+		if widget ~= nil then
+			schedule(function()
+				local data = data_provider()
+				util.update_widget(widget, data, format)
+				callback(data)
+			end)
+		else
+			schedule(function()
+				local data = data_provider()
+				callback(data)
+			end)
+		end
+	elseif widget ~= nil then
+		schedule(function()
+			local data = data_provider()
+			util.update_widget(widget, data, format)
+		end)
+	end
+end
+
 --- Register script for text widget
--- @param widget Widget to update
--- @param script Script to use it's output
--- @param format User-defined format string (optional)
--- @param updtime Update time in seconds (optional)
--- @param sep Output separator (optional)
-function register(widget, script, format, updtime, sep)
+-- @param object Object to be a data provider (function or string with a path to file/shellscript)
+-- @param options Options table with following content (all fields are optional):
+--
+-- 	widget Widget to update
+-- 	callback Function to execute after the update (should have a single parameter which represents table with data)
+--  NOTE: you can use the widget without a callback, the callback without a widget, or both
+--
+-- 	update_time Widget update time (in seconds)
+-- 	separator Output separator (string, could be null)
+-- 	format User-defined format string (any valid Pango markup with variables)
+--
+-- 	async Perform script execution through a temporary file (true/false)
+-- 	file_update_time Temporary file content update time (in seconds)
+--
+-- 	read_file Read file instead of executing it
+function register(object, options)
 	-- Set optional variables
-	updtime = updtime or defaults.update_time
-	format = format or defaults.format_string
-	sep = sep or defaults.separator
+	options = options or {}
+	local updtime = options.update_time or defaults.update_time
+	local fltime = options.file_update_time or defaults.file_update_time
+	local format = options.format or defaults.format_string
+	local sep = options.separator or defaults.separator
+	local callback = options.callback
+	local async = options.async or false
+	local readfile = options.read_file or false
+	local widget = options.widget
 
-	script = util.fullpath(script)
-
-	-- Do it first time
-	local data = util.readshell(script)
-	util.update_widget(widget, data, format)
-
-	-- Schedule it for timed execution
-	schedule(function() 
-		local data = util.readshell(script, sep)
-		util.update_widget(widget, data, format) 
-	end, updtime)
-end
-
---- Register script for widget's widget_field throughout the temporary file
--- @param widget Widget to update
--- @param script Script to use it's output
--- @param format User-defined format string (optional)
--- @param time1 File update time in seconds (optional)
--- @param time2 Widget update time in seconds (optional)
--- @param sep Output separator (optional)
-function register_async(widget, script, format, time1, time2, sep)
-	-- Set optional variables
-	time1 = time1 or defaults.file_update_time
-	time2 = time2 or defaults.update_time 
-	format = format or defaults.format_string 
-	sep = sep or defaults.separator
-
-	script = util.fullpath(script)
-	local tmpfile = util.tmpname(script)
-
-	-- Create temporary file if not exists
-	fl = io.open(tmpfile, "w")
-	io.close(fl)
-
-	-- Do it first time
-	util.execfile(script, tmpfile)
-	local data = util.readfile(tmpfile)
-	util.update_widget(widget, data, format)
-
-	-- Schedule it for timed execution
-	schedule(function() util.execfile(script, tmpfile) end, time1)
-	schedule(function()
-		local data = util.readfile(tmpfile, sep)
-		util.update_widget(widget, data, format)
-	end, time2)
-end
-
---- Register text file for text widget
--- @param widget Widget to update
--- @param file File to use as data source
--- @param format Format string (optional)
--- @param time Update time (optional)
--- @param sep Separator (optional)
-function register_file(widget, file, format, time, sep)
-	-- Set optional variables
-	time = time or defaults.update_time
-	format = format or defaults.format_string
-	sep = sep or defaults.separator
-
-	-- Do it first time
-	local data = util.readfile(file, sep)
-	util.update_widget(widget, data, format)
-
-	-- Schedule it for timed execution
-	schedule(function()
-		local data = util.readfile(file, sep)
-		util.update_widget(widget, data, format)
-	end, time)
-end
-
---- Register Lua function for text widget
--- @param widget Widget to update
--- @param func Function to return variables table
--- @param format Format string (optional)
--- @param time Update time (optional)
-function register_lua(widget, func, format, time)
-	-- Set optional variables
-	time = time or defaults.update_time
-	format = format or defaults.format_string
-	sep = sep or defaults.separator
-
-	-- Do it first time
-	local data = func()
-	util.update_widget(widget, data, format)
-
-	-- Schedule it for timed execution
-	schedule(function()
+	if type(object) == "function" then		--We have a function as a data provider
+		-- Do it first time
 		local data = func()
 		util.update_widget(widget, data, format)
-	end, time)
+		
+		-- Schedule it for timed execution
+		schedule_w(func, widget, callback, format)
+
+	elseif readfile	then				--We have a text file as a data provider
+		-- Do it first time
+		local data = util.readfile(object, sep)
+		util.update_widget(widget, data, format)
+
+		-- Schedule it for timed execution
+		schedule_w(function() return util.readfile(object, sep) end, widget, callback, format)
+
+	elseif async then				--Script could hang Awesome, we need to run it
+		local script = util.fullpath(object)		--through a temporary file
+		local tmpfile = util.tmpname(script)
+
+		-- Create temporary file if not exists
+		fl = io.open(tmpfile, "w")
+		io.close(fl)
+
+		-- Do it first time
+		util.execfile(script, tmpfile)
+		local data = util.readfile(tmpfile)
+		util.update_widget(widget, data, format)
+
+		-- Schedule it for timed execution
+		schedule(function() util.execfile(script, tmpfile) end, fltime)
+		schedule_w(function() return util.readfile(tmpfile, sep) end, widget, callback, format)
+
+	else						--Fast script that can be read through pread
+		local script = util.fullpath(object)
+
+		-- Do it first time
+		local data = util.readshell(script)
+		util.update_widget(widget, data, format)
+
+		-- Schedule it for timed execution
+		schedule_w(function() return util.readshell(script, sep) end, widget, callback, format)
+	end
+
 end
