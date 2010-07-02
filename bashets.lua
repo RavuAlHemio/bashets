@@ -50,6 +50,10 @@ local is_running = false
 -- @param str String to split
 -- @param sep Separator to use
 function util.split(str, sep)
+	if sep == nil then
+		return {str}
+	end
+
 	local parts = {} --parts array
 	local first = 1
 	local ostart, oend = string.find(str, sep, first, true) --regexp disabled search
