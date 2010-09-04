@@ -179,7 +179,7 @@ function util.create_timers_table()
 				func()
 			end
 		end
-		t:add_signal("timeout", f)
+		t:connect_signal("timeout", f)
 		table.insert(timers, t)
 	end
 end
