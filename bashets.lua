@@ -4,7 +4,7 @@
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010 Anton Lobov
 -- @license GPLv3
--- @release 0.4 for Awesome 3.4
+-- @release 0.4.2 for Awesome-git
 -----------------------------------------------------------------------
 
 -- Grab only needed enviroment
@@ -13,9 +13,10 @@ local string = string
 local io = io
 local table = table
 local pairs = pairs
-local timer = timer
+--local timer = timer
 local type = type
-local image = image
+--local image = image
+local capi = {oocairo = oocairo, timer=timer}
 local tonumber = tonumber
 local print = print
 
@@ -172,7 +173,7 @@ function util.create_timers_table()
 	-- Parse table with timer data
 	for _,tmr in pairs(timerdata) do
 		-- Create timer for the period
-		local t = timer {timeout = tmr[1]}
+		local t = capi.timer {timeout = tmr[1]}
 		-- Function to call all dispatched functions
 		local f = function()
 			for _, func in pairs(tmr[2]) do
@@ -185,17 +186,24 @@ function util.create_timers_table()
 end
 
 function util.update_widget_field(widget, valuess)
-	if widget.type == "imagebox" then				--imagebox
-		widget["image"] = image(valuess)
-	elseif widget.type == "textbox" then				--textbox
-		widget["text"] = valuess
-	elseif widget["widget"] ~= nil then
-		if widget.set_value ~= nil then				--progressbar
+--	print(widget.type)
+	--if widget.type == "imagebox" then				--imagebox
+	if widget.set_image ~= nil then				--imagebox
+		--widget["image"] = image(valuess) moved to oocairo
+		--widget["image"] = capi.oocairo.image_surface_create_from_png(valuess)
+		--widget:set_image(capi.oocairo.image_surface_create_from_png(valuess))
+		widget:set_image(valuess)
+	--elseif widget.type == "textbox" then				--textbox
+	elseif widget.set_markup ~= nil then				--textbox
+		--widget["text"] = valuess
+		widget:set_markup(valuess)
+	--elseif widget["widget"] ~= nil then
+		elseif widget.set_value ~= nil then				--progressbar
 			widget:set_value(tonumber(valuess))
 		elseif widget.add_value ~= nil then			--graph
 			widget:add_value(tonumber(valuess))
 		end
-	end
+	--end
 end
 
 --- Update widget from values
