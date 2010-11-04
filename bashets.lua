@@ -4,7 +4,7 @@
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010 Anton Lobov
 -- @license GPLv3
--- @release 0.4.2 for Awesome-git
+-- @release 0.4.3 for Awesome-git
 -----------------------------------------------------------------------
 
 -- Grab only needed enviroment
