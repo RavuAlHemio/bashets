@@ -4,7 +4,7 @@
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010 Anton Lobov
 -- @license GPLv3
--- @release 0.4.3 for Awesome-git
+-- @release 0.5 for Awesome-git
 -----------------------------------------------------------------------
 
 -- Grab only needed enviroment
@@ -35,12 +35,16 @@ local util = {}
 local timerdata = {}
 local timers = {}
 
+-- External mode data
+local ewidgets = {}
+
 -- Some default values
 local defaults = {}
 defaults.update_time = 1
 defaults.file_update_time = 2
 defaults.format_string = "$1"
 defaults.separator = " "
+defaults.updater = "runner.sh"
 
 -- State variable
 local is_running = false
@@ -72,7 +76,7 @@ function util.split(str, sep)
 	return parts
 end
 
-function util.tmpname(script)
+function util.tmpkey(script)
 	-- Replace all slashes with empty string so that /home/user1/script.sh 
 	-- and /home/user2/script.sh will have different temporary files
 	local tmpname = string.gsub(script, '/', '')
@@ -81,8 +85,12 @@ function util.tmpname(script)
 	-- and "script.sh arg2" will have different temporary files
 	tmpname = string.gsub(tmpname, '%s+', '.')
 
+	return tmpname
+end
+
+function util.tmpname(script)
 	-- Generated script-parameter unique temporary file path
-	local file = tmp_folder .. tmpname .. '.bashets.out'
+	local file = tmp_folder .. util.tmpkey(script) .. '.bashets.out'
 
 	return file
 end
@@ -103,14 +111,8 @@ function util.execfile(script, file)
 	awful.util.spawn_with_shell(script .. " > " .. file)
 end
 
---- Read temporary file to a table or string
--- @param file File to be read
--- @param israw If true, return raw string, not table
-function util.readfile(file, sep)
-	local fh = io.input(file)
-	local str = fh:read("*all");
-	io.close(fh)
 
+function util.readstring(str, sep)
 	if sep == nil then
 		return str
 	else
@@ -119,18 +121,24 @@ function util.readfile(file, sep)
 	end
 end
 
+--- Read temporary file to a table or string
+-- @param file File to be read
+-- @param israw If true, return raw string, not table
+function util.readfile(file, sep)
+	local fh = io.input(file)
+	local str = fh:read("*all");
+	io.close(fh)
+
+	return util.readstring(str, sep)
+end
+
 --- Read script output to a table or string
 -- @param script Script to execute
 -- @param israw If true, return raw string, not table
 function util.readshell(script, sep)
 	local str = awful.util.pread(script)
 
-	if sep == nil then
-		return str
-	else
-		parts = util.split(str, sep);
-		return parts
-	end
+	return util.readstring(str, sep)
 end
 
 --- Format script output with user defined format string
@@ -243,6 +251,9 @@ function set_defaults(defs)
 		end 
 		if defs.format_string ~= nil then
 			defaults.format_string = defs.format_string
+		end
+		if defs.updater ~= nil then
+			defaults.updater = defs.updater
 		end 
 
 		defaults.separator = defs.separator --now could be nil
@@ -262,6 +273,14 @@ function start()
 	for _, tmr in pairs(timers) do
 		tmr:start()
 	end
+
+	-- Kill all externals (if some were here from previous launch)
+	awful.util.spawn_with_shell('killall ' .. defaults.updater)
+
+	-- Run all externals
+	for _, wgt in pairs(ewidgets) do
+		awful.util.spawn_with_shell(wgt.cmd)
+	end
 	is_running = true
 end
 
@@ -271,6 +290,10 @@ function stop()
 	for _, tmr in pairs(timers) do
 		tmr:stop()
 	end
+
+	-- Kill all externals
+	awful.util.spawn_with_shell('killall ' .. defaults.updater)
+
 	is_running = false
 end
 
@@ -305,27 +328,64 @@ end
 -- @param widget Widget to update, if null, nothing is updated
 -- @param callback Callback to call after the update of values, if null, nothing is called
 -- @param format Format string for widget //N.B.: it is not checked for null
-function schedule_w(data_provider, widget, callback, format)
+function schedule_w(data_provider, widget, callback, format, updtime)
 	if callback ~= nil and type(callback) == "function" then
 		if widget ~= nil then
 			schedule(function()
 				local data = data_provider()
 				util.update_widget(widget, data, format)
 				callback(data)
-			end)
+			end, updtime)
 		else
 			schedule(function()
 				local data = data_provider()
 				callback(data)
-			end)
+			end, updtime)
 		end
 	elseif widget ~= nil then
 		schedule(function()
 			local data = data_provider()
 			util.update_widget(widget, data, format)
-		end)
+		end, updtime)
 	end
 end
+
+--- External script registration. Script will pass data by calling external_w through dbus
+function schedule_e(script, widget, callback, format, updtime, sep)
+	local ascript = util.fullpath(script)
+	local key = util.tmpkey(ascript)
+
+	ewidgets[key] = {}
+	ewidgets[key].widget = widget
+	ewidgets[key].callback = callback
+	ewidgets[key].format = format
+	ewidgets[key].separator = sep
+	ewidgets[key].cmd = util.fullpath(defaults.updater) .. " \"" .. ascript .. "\" " .. key .. " " ..updtime
+	
+--	awful.util.spawn_with_shell()
+end
+
+
+function external_w(raw_data, key)
+
+	local callback = ewidgets[key].callback or nil
+	local widget = ewidgets[key].widget or nil
+	local format = ewidgets[key].format or defaults.format_string
+	local data = util.readstring(raw_data, ewidgets[key].separator)
+
+	if callback ~= nil and type(callback) == "function" then
+		if widget ~= nil then
+			util.update_widget(widget, data, format)
+			callback(data)
+		else
+			callback(data)
+		end
+	elseif widget ~= nil then
+		util.update_widget(widget, data, format)
+	end
+end
+
+
 
 --- Register script for text widget
 -- @param object Object to be a data provider (function or string with a path to file/shellscript)
@@ -354,6 +414,7 @@ function register(object, options)
 	local async = options.async or false
 	local readfile = options.read_file or false
 	local widget = options.widget
+	local external = options.external or false
 
 	if type(object) == "function" then		--We have a function as a data provider
 		-- Do it first time
@@ -361,7 +422,7 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 		
 		-- Schedule it for timed execution
-		schedule_w(func, widget, callback, format)
+		schedule_w(func, widget, callback, format, updtime)
 
 	elseif readfile	then				--We have a text file as a data provider
 		-- Do it first time
@@ -369,7 +430,7 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
-		schedule_w(function() return util.readfile(object, sep) end, widget, callback, format)
+		schedule_w(function() return util.readfile(object, sep) end, widget, callback, format, updtime)
 
 	elseif async then				--Script could hang Awesome, we need to run it
 		local script = util.fullpath(object)		--through a temporary file
@@ -386,9 +447,12 @@ function register(object, options)
 
 		-- Schedule it for timed execution
 		schedule(function() util.execfile(script, tmpfile) end, fltime)
-		schedule_w(function() return util.readfile(tmpfile, sep) end, widget, callback, format)
+		schedule_w(function() return util.readfile(tmpfile, sep) end, widget, callback, format, updtime)
 
-	else						--Fast script that can be read through pread
+	elseif external then		-- Script provides external data through dbus
+		local script = util.fullpath(object)
+		schedule_e(script, widget, callback, format, updtime, sep)
+	else						-- Fast script that can be read through pread
 		local script = util.fullpath(object)
 
 		-- Do it first time
@@ -396,7 +460,7 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
-		schedule_w(function() return util.readshell(script, sep) end, widget, callback, format)
+		schedule_w(function() return util.readshell(script, sep) end, widget, callback, format, updtime)
 	end
 
 end
