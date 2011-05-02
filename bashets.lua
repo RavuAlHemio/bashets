@@ -4,7 +4,7 @@
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010 Anton Lobov
 -- @license GPLv3
--- @release 0.5 for Awesome-git
+-- @release 0.6 for Awesome-git
 -----------------------------------------------------------------------
 
 -- Grab only needed enviroment
@@ -16,10 +16,10 @@ local pairs = pairs
 --local timer = timer
 local type = type
 --local image = image
-local capi = {oocairo = oocairo, timer=timer}
+local capi = {oocairo = oocairo, timer = timer, dbus = dbus}
 local tonumber = tonumber
 local print = print
-
+local error = error
 
 --- Bashets module
 module("bashets")
@@ -275,7 +275,7 @@ function start()
 	end
 
 	-- Kill all externals (if some were here from previous launch)
-	awful.util.spawn_with_shell('killall ' .. defaults.updater)
+	--awful.util.spawn_with_shell('killall ' .. defaults.updater)
 
 	-- Run all externals
 	for _, wgt in pairs(ewidgets) do
@@ -361,10 +361,10 @@ function schedule_e(script, widget, callback, format, updtime, sep)
 	ewidgets[key].format = format
 	ewidgets[key].separator = sep
 	ewidgets[key].cmd = util.fullpath(defaults.updater) .. " \"" .. ascript .. "\" " .. key .. " " ..updtime
+	--print(ewidgets[key].cmd)
 	
 --	awful.util.spawn_with_shell()
 end
-
 
 function external_w(raw_data, key)
 
@@ -382,6 +382,40 @@ function external_w(raw_data, key)
 		end
 	elseif widget ~= nil then
 		util.update_widget(widget, data, format)
+	end
+end
+
+function register_d(bus, iface, widget, callback, format)
+	if capi.dbus then
+		bus = bus or "session"
+		capi.dbus.add_match(bus, "interface='" .. iface .. "'")
+		
+		capi.dbus.connect_signal(iface, function (...) 
+			local argums = {...}
+			local data = {}
+			for _,v in pairs(argums) do
+				if type(v) == "table" then
+					for _,iv in pairs(v) do
+						table.insert(data, iv)
+					end
+				else
+					table.insert(data, v)
+				end
+			end
+
+			if callback ~= nil and type(callback) == "function" then
+				if widget ~= nil then
+					util.update_widget(widget, data, format)
+					callback(data)
+				else
+					callback(data)
+				end
+			elseif widget ~= nil then
+				util.update_widget(widget, data, format)
+			end
+		end)
+	else
+		error("bashets: You are trying to employ dbus, but no dbus api detected in your build of awesome")
 	end
 end
 
@@ -412,6 +446,8 @@ function register(object, options)
 	local sep = options.separator or defaults.separator
 	local callback = options.callback
 	local async = options.async or false
+	local isdbus = options.dbus or false
+	local busname = options.busname or "session"
 	local readfile = options.read_file or false
 	local widget = options.widget
 	local external = options.external or false
@@ -452,6 +488,9 @@ function register(object, options)
 	elseif external then		-- Script provides external data through dbus
 		local script = util.fullpath(object)
 		schedule_e(script, widget, callback, format, updtime, sep)
+	elseif isdbus then			-- Data is fetched through a message bus
+		register_d(busname, object, widget, callback, format)
+		--print("registered with bus name \"" .. busname .. "\" and object \"" .. object .. "\"")
 	else						-- Fast script that can be read through pread
 		local script = util.fullpath(object)
 
