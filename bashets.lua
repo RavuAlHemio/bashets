@@ -4,8 +4,8 @@
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010 Anton Lobov
 -- @license GPLv3
--- @release 0.6 for Awesome-git
------------------------------------------------------------------------
+-- @release 0.6.1 (meant to be backwards compatible with older versions)
+------------------------------------------------------------------------
 
 -- Grab only needed enviroment
 local awful = require("awful")
@@ -13,9 +13,9 @@ local string = string
 local io = io
 local table = table
 local pairs = pairs
---local timer = timer
+local timer = timer
 local type = type
---local image = image
+local image = image
 local capi = {oocairo = oocairo, timer = timer, dbus = dbus}
 local tonumber = tonumber
 local print = print
@@ -181,29 +181,39 @@ function util.create_timers_table()
 	-- Parse table with timer data
 	for _,tmr in pairs(timerdata) do
 		-- Create timer for the period
-		local t = capi.timer {timeout = tmr[1]}
+		local t
+		if capi.timer ~= nil then
+			t = capi.timer {timeout = tmr[1]}
+		else
+			t = timer {timeout = tmr[1]}
+		end
 		-- Function to call all dispatched functions
 		local f = function()
 			for _, func in pairs(tmr[2]) do
 				func()
 			end
 		end
-		t:connect_signal("timeout", f)
+		
+		if t.add_signal ~= nil then
+			t:add_signal("timeout", f)
+		else
+			t:connect_signal("timeout", f)
+		end
 		table.insert(timers, t)
 	end
 end
 
 function util.update_widget_field(widget, valuess)
 --	print(widget.type)
-	--if widget.type == "imagebox" then				--imagebox
-	if widget.set_image ~= nil then				--imagebox
-		--widget["image"] = image(valuess) moved to oocairo
+	if widget.type == "imagebox" then				--imagebox (old API)
+		widget["image"] = image(valuess)
+	elseif widget.set_image ~= nil then				--imagebox (new API)
 		--widget["image"] = capi.oocairo.image_surface_create_from_png(valuess)
 		--widget:set_image(capi.oocairo.image_surface_create_from_png(valuess))
 		widget:set_image(valuess)
-	--elseif widget.type == "textbox" then				--textbox
-	elseif widget.set_markup ~= nil then				--textbox
-		--widget["text"] = valuess
+	elseif widget.type == "textbox" then				--textbox (old API)
+		widget["text"] = valuess
+	elseif widget.set_markup ~= nil then				--textbox (new API)
 		widget:set_markup(valuess)
 	--elseif widget["widget"] ~= nil then
 		elseif widget.set_value ~= nil then				--progressbar
