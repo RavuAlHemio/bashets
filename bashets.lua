@@ -488,7 +488,7 @@ function bashets.register(object, options)
 
 		-- Do it first time
 		util.execfile(script, tmpfile)
-		local data = util.readfile(tmpfile)
+		local data = util.readfile(tmpfile, sep)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
@@ -505,7 +505,7 @@ function bashets.register(object, options)
 		local script = util.fullpath(object)
 
 		-- Do it first time
-		local data = util.readshell(script)
+		local data = util.readshell(script, sep)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
