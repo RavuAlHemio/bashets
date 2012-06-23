@@ -2,9 +2,9 @@
 -- Bashets - use your shellscript's output in Awesome3 widgets
 --
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
--- @copyright 2010 Anton Lobov
+-- @copyright 2010-2012 Anton Lobov
 -- @license GPLv3
--- @release 0.6.1 (meant to be backwards compatible with older versions)
+-- @release 0.6.3 
 ------------------------------------------------------------------------
 
 -- Grab only needed enviroment
@@ -22,7 +22,7 @@ local print = print
 local error = error
 
 --- Bashets module
-module("bashets")
+local bashets = {}
 
 -- Default paths
 local script_path = "/usr/share/awesome/bashets/"
@@ -239,19 +239,19 @@ end
 
 --- Set path for scripts
 -- @param path Path to set
-function set_script_path(path)
+function bashets.set_script_path(path)
 	script_path = path
 end
 
 --- Set path for temporary files
 -- @param path Path to set
-function set_temporary_path(path)
+function bashets.set_temporary_path(path)
 	tmp_folder = path
 end
 
 --- Set default values
 -- @param defs Table with defaults
-function set_defaults(defs)
+function bashets.set_defaults(defs)
 	if type(defs) == "table" then
 		if defs.update_time ~= nil then
 			defaults.update_time = defs.update_time
@@ -274,7 +274,7 @@ end
 -- # Acting functions
 
 --- Start widget updates
-function start()
+function bashets.start()
 	-- Create timers table if not initialized or empty
 	if (not timers) or table.maxn(timers) == 0 then
 		util.create_timers_table()
@@ -295,7 +295,7 @@ function start()
 end
 
 --- Stop widget updates
-function stop()
+function bashets.stop()
 	-- Stop all timers
 	for _, tmr in pairs(timers) do
 		tmr:stop()
@@ -308,23 +308,23 @@ function stop()
 end
 
 --- Check whether updates are running
-function get_running()
+function bashets.get_running()
 	return is_running
 end
 
 --- Toggle updates
-function toggle()
+function bashets.toggle()
 	if is_running then
-		start()
+		bashets.start()
 	else
-		stop()
+		bashets.stop()
 	end
 end
 
 --- Shedule function for timed execution
 -- @param func Function to run
 -- @param updatime Update time (optional)
-function schedule(func, updtime)
+function bashets.schedule(func, updtime)
 	updtime = updtime or defaults.update_time
 	if func ~= nil then
 		util.add_to_timings(updtime, func)
@@ -338,22 +338,22 @@ end
 -- @param widget Widget to update, if null, nothing is updated
 -- @param callback Callback to call after the update of values, if null, nothing is called
 -- @param format Format string for widget //N.B.: it is not checked for null
-function schedule_w(data_provider, widget, callback, format, updtime)
+function bashets.schedule_w(data_provider, widget, callback, format, updtime)
 	if callback ~= nil and type(callback) == "function" then
 		if widget ~= nil then
-			schedule(function()
+			bashets.schedule(function()
 				local data = data_provider()
 				util.update_widget(widget, data, format)
 				callback(data)
 			end, updtime)
 		else
-			schedule(function()
+			bashets.schedule(function()
 				local data = data_provider()
 				callback(data)
 			end, updtime)
 		end
 	elseif widget ~= nil then
-		schedule(function()
+		bashets.schedule(function()
 			local data = data_provider()
 			util.update_widget(widget, data, format)
 		end, updtime)
@@ -361,7 +361,7 @@ function schedule_w(data_provider, widget, callback, format, updtime)
 end
 
 --- External script registration. Script will pass data by calling external_w through dbus
-function schedule_e(script, widget, callback, format, updtime, sep)
+function bashets.schedule_e(script, widget, callback, format, updtime, sep)
 	local ascript = util.fullpath(script)
 	local key = util.tmpkey(ascript)
 
@@ -376,7 +376,7 @@ function schedule_e(script, widget, callback, format, updtime, sep)
 --	awful.util.spawn_with_shell()
 end
 
-function external_w(raw_data, key)
+function bashets.external_w(raw_data, key)
 
 	local callback = ewidgets[key].callback or nil
 	local widget = ewidgets[key].widget or nil
@@ -395,7 +395,7 @@ function external_w(raw_data, key)
 	end
 end
 
-function register_d(bus, iface, widget, callback, format)
+function bashets.register_d(bus, iface, widget, callback, format)
 	if capi.dbus then
 		bus = bus or "session"
 		capi.dbus.add_match(bus, "interface='" .. iface .. "'")
@@ -447,7 +447,7 @@ end
 -- 	file_update_time Temporary file content update time (in seconds)
 --
 -- 	read_file Read file instead of executing it
-function register(object, options)
+function bashets.register(object, options)
 	-- Set optional variables
 	options = options or {}
 	local updtime = options.update_time or defaults.update_time
@@ -468,7 +468,7 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 		
 		-- Schedule it for timed execution
-		schedule_w(func, widget, callback, format, updtime)
+		bashets.schedule_w(func, widget, callback, format, updtime)
 
 	elseif readfile	then				--We have a text file as a data provider
 		-- Do it first time
@@ -476,7 +476,7 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
-		schedule_w(function() return util.readfile(object, sep) end, widget, callback, format, updtime)
+		bashets.schedule_w(function() return util.readfile(object, sep) end, widget, callback, format, updtime)
 
 	elseif async then				--Script could hang Awesome, we need to run it
 		local script = util.fullpath(object)		--through a temporary file
@@ -492,14 +492,14 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
-		schedule(function() util.execfile(script, tmpfile) end, fltime)
-		schedule_w(function() return util.readfile(tmpfile, sep) end, widget, callback, format, updtime)
+		bashets.schedule(function() util.execfile(script, tmpfile) end, fltime)
+		bashets.schedule_w(function() return util.readfile(tmpfile, sep) end, widget, callback, format, updtime)
 
 	elseif external then		-- Script provides external data through dbus
 		local script = util.fullpath(object)
-		schedule_e(script, widget, callback, format, updtime, sep)
+		bashets.schedule_e(script, widget, callback, format, updtime, sep)
 	elseif isdbus then			-- Data is fetched through a message bus
-		register_d(busname, object, widget, callback, format)
+		bashets.register_d(busname, object, widget, callback, format)
 		--print("registered with bus name \"" .. busname .. "\" and object \"" .. object .. "\"")
 	else						-- Fast script that can be read through pread
 		local script = util.fullpath(object)
@@ -509,7 +509,9 @@ function register(object, options)
 		util.update_widget(widget, data, format)
 
 		-- Schedule it for timed execution
-		schedule_w(function() return util.readshell(script, sep) end, widget, callback, format, updtime)
+		bashets.schedule_w(function() return util.readshell(script, sep) end, widget, callback, format, updtime)
 	end
 
 end
+
+return bashets
