@@ -3,6 +3,9 @@
 --
 -- @author Anton Lobov &lt;ahmad200512@yandex.ru&gt;
 -- @copyright 2010-2012 Anton Lobov
+--
+-- @contributor Victor Unegbu (fixed issue with formatting)
+--
 -- @license GPLv3
 -- @release 0.6.3 
 ------------------------------------------------------------------------
