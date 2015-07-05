@@ -198,10 +198,10 @@ function util.create_timers_table()
 			end
 		end
 		
-		if t.add_signal ~= nil then
-			t:add_signal("timeout", f)
-		else
+		if t.connect_signal ~= nil then
 			t:connect_signal("timeout", f)
+		else
+			t:add_signal("timeout", f)
 		end
 		table.insert(timers, t)
 	end
