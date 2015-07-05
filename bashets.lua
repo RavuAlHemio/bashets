@@ -5,9 +5,10 @@
 -- @copyright 2010-2012 Anton Lobov
 --
 -- @contributor Victor Unegbu (fixed issue with formatting)
+-- @contributor Ond&#345;ej Ho&#353;ek (updates for awesome 3.5 and beyond)
 --
 -- @license GPLv3
--- @release 0.6.3 
+-- @release 0.6.3
 ------------------------------------------------------------------------
 
 -- Grab only needed enviroment
@@ -16,7 +17,7 @@ local string = string
 local io = io
 local table = table
 local pairs = pairs
-local timer = timer
+local timer = require("gears.timer")
 local type = type
 local image = image
 local capi = {oocairo = oocairo, timer = timer, dbus = dbus}
